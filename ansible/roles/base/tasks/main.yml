@@ -66,5 +66,12 @@
   changed_when: "'ALREADY_ENABLED' not in svc.stderr"
   notify: Reload firewalld
 
+- name: Remove default services we do not want on the cluster VLAN
+  ansible.builtin.command: firewall-cmd --permanent --zone=internal --remove-service={{ item }}
+  loop: [cockpit, mdns, samba-client, dhcpv6-client]
+  register: rm
+  changed_when: "'NOT_ENABLED' not in rm.stderr"
+  notify: Reload firewalld
+
 - name: Apply pending handlers now
   ansible.builtin.meta: flush_handlers
