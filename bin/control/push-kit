@@ -6,7 +6,7 @@ cd "$REPO"
 source "$HOME/.tofu-env"
 
 NODE="${NODE:-hpc-pve}"
-STORAGE="${STORAGE:-nas-nfs}"
+STORAGE="${STORAGE:-INDEX}"
 SLOT="${SLOT:-ide2}"   # the head VM's empty CD drive; check with: qm config VMID
 AUTH="Authorization: PVEAPIToken=${PROXMOX_VE_API_TOKEN}"
 API="${PROXMOX_VE_ENDPOINT}api2/json"
@@ -17,13 +17,14 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 ISO="${TMP}/${NAME}"
 
-PATHS=()
+STAGE="${TMP}/stage"
+mkdir -p "$STAGE"
 for p in classes.yml ansible bin/head jobs; do
-  if [ -e "$p" ]; then PATHS+=("$p"); fi
+  if [ -e "$p" ]; then cp -a --parents "$p" "$STAGE"/; fi
 done
 
 echo "Building ${NAME}"
-xorriso -as mkisofs -quiet -V HEADKIT -J -R -o "$ISO" "${PATHS[@]}"
+xorriso -as mkisofs -quiet -V HEADKIT -J -R -o "$ISO" "$STAGE"
 
 echo "Uploading to ${STORAGE}"
 UPID="$(curl -ks -X POST -H "$AUTH" -F content=iso -F "filename=@${ISO}" \
