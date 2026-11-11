@@ -28,12 +28,12 @@
   notify: Reload sysctl
 
 - name: Serve time to the cluster VLAN
-  ansible.builtin.copy:
-    dest: /etc/chrony.d/hpc.conf
-    content: |
+  ansible.builtin.blockinfile:
+    path: /etc/chrony.conf
+    marker: "# {mark} ANSIBLE MANAGED: cluster VLAN"
+    block: |
       allow {{ network.subnet }}
       local stratum 10
-    mode: "0644"
   notify: Restart chronyd
 
 - name: Chrony enabled and running
