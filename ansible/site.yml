@@ -1,0 +1,10 @@
+---
+- name: Configure the head node
+  hosts: all
+  become: true
+  vars:
+    data_disk: /dev/sdb
+    data_mount: /srv/nfs
+    data_label: HPCDATA
+  roles:
+    - storage
