@@ -77,3 +77,7 @@ resource "proxmox_virtual_environment_vm" "head" {
 output "head_ipv4" {
   value = proxmox_virtual_environment_vm.head.ipv4_addresses
 }
+
+output "head_vm_id" {
+  value = proxmox_virtual_environment_vm.head.vm_id
+}

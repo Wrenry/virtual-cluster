@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEST="${HOME}/virtual-cluster"
+MNT="$(mktemp -d)"
+trap 'sudo umount "$MNT" 2>/dev/null || true; rmdir "$MNT"' EXIT
+
+sudo mount -o ro /dev/disk/by-label/HEADKIT "$MNT"
+mkdir -p "$DEST"
+rsync -rlt --delete --chmod=u+rwX "$MNT"/ "$DEST"/
+echo "Kit synced to $DEST. Next: ansible-playbook -c local -i localhost, $DEST/ansible/site.yml"
