@@ -1,0 +1,18 @@
+# Managed by Ansible, do not edit by hand
+interface={{ vlan_iface }}
+bind-interfaces
+domain-needed
+bogus-priv
+no-resolv
+domain={{ cluster_domain }}
+local=/{{ cluster_domain }}/
+expand-hosts
+host-record=hpc-head.{{ cluster_domain }},{{ network.head_ip }}
+
+# Static leases only: nodes get an address only if a file in the hosts dir names their MAC
+dhcp-range={{ network.head_ip }},static,255.255.255.0
+dhcp-hostsdir=/etc/dnsmasq-hosts
+# Empty router option = no default gateway on this isolated VLAN
+dhcp-option=option:router
+dhcp-option=option:dns-server,{{ network.head_ip }}
+dhcp-option=option:ntp-server,{{ network.head_ip }}

@@ -1,0 +1,70 @@
+---
+- name: Install base packages
+  ansible.builtin.dnf:
+    name: [chrony, firewalld, bind-utils]
+    state: present
+
+- name: Find the interface that carries the cluster VLAN address
+  ansible.builtin.set_fact:
+    vlan_iface: >-
+      {{ ansible_facts.interfaces
+         | map('extract', ansible_facts)
+         | selectattr('ipv4', 'defined')
+         | selectattr('ipv4.address', 'equalto', network.head_ip)
+         | map(attribute='device')
+         | first }}
+
+- name: Show which interface it is
+  ansible.builtin.debug:
+    msg: "Cluster VLAN interface is {{ vlan_iface }}"
+
+- name: Never route between management and the cluster
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/90-hpc.conf
+    content: |
+      net.ipv4.ip_forward = 0
+      net.ipv6.conf.all.forwarding = 0
+    mode: "0644"
+  notify: Reload sysctl
+
+- name: Serve time to the cluster VLAN
+  ansible.builtin.copy:
+    dest: /etc/chrony.d/hpc.conf
+    content: |
+      allow {{ network.subnet }}
+      local stratum 10
+    mode: "0644"
+  notify: Restart chronyd
+
+- name: Chrony enabled and running
+  ansible.builtin.systemd:
+    name: chronyd
+    enabled: true
+    state: started
+
+- name: Firewalld enabled and running
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
+- name: Which zone is the cluster interface in
+  ansible.builtin.command: firewall-cmd --permanent --get-zone-of-interface={{ vlan_iface }}
+  register: zone
+  changed_when: false
+  failed_when: false
+
+- name: Put the cluster interface in the internal zone
+  ansible.builtin.command: firewall-cmd --permanent --zone=internal --change-interface={{ vlan_iface }}
+  when: zone.stdout | trim != 'internal'
+  notify: Reload firewalld
+
+- name: Open only the services the cluster VLAN needs
+  ansible.builtin.command: firewall-cmd --permanent --zone=internal --add-service={{ item }}
+  loop: [ssh, dhcp, dns, ntp, nfs, mountd, rpc-bind]
+  register: svc
+  changed_when: "'ALREADY_ENABLED' not in svc.stderr"
+  notify: Reload firewalld
+
+- name: Apply pending handlers now
+  ansible.builtin.meta: flush_handlers
