@@ -1,0 +1,27 @@
+---
+- name: Install the NFS server
+  ansible.builtin.dnf:
+    name: nfs-utils
+    state: present
+
+- name: Make sure the exports drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/exports.d
+    state: directory
+    mode: "0755"
+
+- name: Export the shared directories to the cluster VLAN only
+  ansible.builtin.copy:
+    dest: /etc/exports.d/hpc.exports
+    content: |
+      {{ data_mount }}/home    {{ network.subnet }}(rw,sync,no_subtree_check,root_squash)
+      {{ data_mount }}/apps    {{ network.subnet }}(ro,sync,no_subtree_check,root_squash)
+      {{ data_mount }}/scratch {{ network.subnet }}(rw,sync,no_subtree_check,root_squash)
+    mode: "0644"
+  notify: Re-export
+
+- name: NFS server enabled and running
+  ansible.builtin.systemd:
+    name: nfs-server
+    enabled: true
+    state: started
