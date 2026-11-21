@@ -15,3 +15,4 @@
     - repo
     - dnsmasq
     - nfs
+    - slurm

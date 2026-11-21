@@ -1,0 +1,137 @@
+---
+- name: Fixed-ID groups for munge and slurm
+  ansible.builtin.group:
+    name: "{{ item.name }}"
+    gid: "{{ item.id }}"
+    system: true
+  loop:
+    - { name: munge, id: "{{ munge_uid }}" }
+    - { name: slurm, id: "{{ slurm_uid }}" }
+
+- name: Fixed-ID users for munge and slurm (before the packages, so the RPMs reuse them)
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    uid: "{{ item.id }}"
+    group: "{{ item.name }}"
+    system: true
+    shell: /sbin/nologin
+    home: "{{ item.home }}"
+    create_home: false
+  loop:
+    - { name: munge, id: "{{ munge_uid }}", home: /run/munge }
+    - { name: slurm, id: "{{ slurm_uid }}", home: /var/lib/slurm }
+
+- name: Install Slurm, munge and MariaDB from the offline repo only
+  ansible.builtin.dnf:
+    name:
+      - slurm
+      - slurm-slurmctld
+      - slurm-slurmdbd
+      - munge
+      - pmix
+      - mariadb-server
+    state: present
+    disablerepo: "*"
+    enablerepo: hpc-local
+
+- name: Slurm directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/slurm, owner: root, mode: "0755" }
+    - { path: /var/log/slurm, owner: slurm, mode: "0755" }
+    - { path: /var/spool/slurmctld, owner: slurm, mode: "0700" }
+
+- name: Generate the munge key once (never on the ISO)
+  ansible.builtin.command: dd if=/dev/urandom of=/etc/munge/munge.key bs=1024 count=1
+  args:
+    creates: /etc/munge/munge.key
+
+- name: Munge key owned by munge, readable only by it
+  ansible.builtin.file:
+    path: /etc/munge/munge.key
+    owner: munge
+    group: munge
+    mode: "0400"
+
+- name: Munge enabled and running
+  ansible.builtin.systemd:
+    name: munge
+    enabled: true
+    state: started
+
+- name: MariaDB settings for Slurm accounting
+  ansible.builtin.copy:
+    dest: /etc/my.cnf.d/slurm-innodb.cnf
+    content: |
+      [mysqld]
+      innodb_buffer_pool_size=1024M
+      innodb_log_file_size=64M
+      innodb_lock_wait_timeout=900
+    mode: "0644"
+  notify: Restart mariadb
+
+- name: MariaDB enabled and running
+  ansible.builtin.systemd:
+    name: mariadb
+    enabled: true
+    state: started
+
+- name: Generate the database password once (root-only, never on the ISO)
+  ansible.builtin.shell: umask 077 && openssl rand -hex 16 > /etc/slurm/dbpass
+  args:
+    creates: /etc/slurm/dbpass
+
+- name: Read the database password
+  ansible.builtin.slurp:
+    src: /etc/slurm/dbpass
+  register: dbpass_raw
+  no_log: true
+
+- name: Keep the password for the next tasks
+  ansible.builtin.set_fact:
+    slurm_db_pass: "{{ dbpass_raw.content | b64decode | trim }}"
+  no_log: true
+
+- name: Check for the Slurm database user
+  ansible.builtin.command: mysql -NBe "SELECT COUNT(*) FROM mysql.user WHERE user='slurm' AND host='localhost'"
+  register: slurm_db_user
+  changed_when: false
+
+- name: Create the accounting database and its user
+  ansible.builtin.command: >-
+    mysql -e "CREATE DATABASE IF NOT EXISTS {{ slurm_db_name }};
+    CREATE USER 'slurm'@'localhost' IDENTIFIED BY '{{ slurm_db_pass }}';
+    GRANT ALL ON {{ slurm_db_name }}.* TO 'slurm'@'localhost';"
+  when: slurm_db_user.stdout == "0"
+  no_log: true
+
+- name: slurmdbd config
+  ansible.builtin.copy:
+    dest: /etc/slurm/slurmdbd.conf
+    owner: slurm
+    group: slurm
+    mode: "0600"
+    content: |
+      AuthType=auth/munge
+      DbdHost={{ ansible_hostname }}
+      SlurmUser=slurm
+      LogFile=/var/log/slurm/slurmdbd.log
+      PidFile=/run/slurmdbd/slurmdbd.pid
+      StorageType=accounting_storage/mysql
+      StorageHost=localhost
+      StorageUser=slurm
+      StoragePass={{ slurm_db_pass }}
+      StorageLoc={{ slurm_db_name }}
+  no_log: true
+  notify: Restart slurmdbd
+
+- name: slurmdbd enabled and running
+  ansible.builtin.systemd:
+    name: slurmdbd
+    enabled: true
+    state: started

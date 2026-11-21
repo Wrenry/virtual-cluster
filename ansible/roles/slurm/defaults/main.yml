@@ -1,0 +1,5 @@
+---
+munge_uid: 450
+slurm_uid: 451
+slurm_cluster_name: hpc-lab
+slurm_db_name: slurm_acct_db

@@ -17,3 +17,4 @@
     gpgcheck: false
     enabled: true
     priority: "10"
+    metadata_expire: "0"
