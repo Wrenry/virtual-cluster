@@ -1,0 +1,16 @@
+# Slurm (built from source RPMs, see the Slurm RPM Build doc)
+slurm
+slurm-slurmctld
+slurm-slurmdbd
+slurm-slurmd
+slurm-libpmi
+# Authentication and PMIx
+munge
+munge-libs
+pmix
+# Accounting database
+mariadb-server
+mariadb
+# Common to head node and workers
+chrony
+nfs-utils

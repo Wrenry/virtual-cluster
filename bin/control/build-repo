@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Stages the offline repo (repo/packages.txt plus the Slurm RPMs) in repo-build/stage.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$REPO"
+
+RPMS="${RPMS:-$HOME/rpmbuild/RPMS/x86_64}"
+OUT="${OUT:-$REPO/repo-build}"
+STAGE="$OUT/stage"
+
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+
+createrepo_c -q "$RPMS"
+VER="$(rpm -qp --qf '%{VERSION}\n' "$RPMS"/slurm-slurmctld-*.rpm | head -1)"
+
+mapfile -t PKGS < <(grep -v -E '^[[:space:]]*(#|$)' repo/packages.txt)
+echo "Resolving ${#PKGS[@]} packages with all dependencies (Slurm ${VER})"
+dnf download -q --resolve --alldeps --destdir "$STAGE" \
+  --repofrompath="slurm-local,file://${RPMS}" --setopt=slurm-local.gpgcheck=0 \
+  "${PKGS[@]}"
+rm -f "$STAGE"/*.i686.rpm
+
+if ls "$STAGE" | grep '^slurm' | grep -v -- "-${VER}-"; then
+  echo "The Slurm packages listed above are not ${VER}. Fix the manifest and rerun." >&2
+  exit 1
+fi
+
+createrepo_c -q "$STAGE"
+echo "$(ls "$STAGE"/*.rpm | wc -l) packages, $(du -sh "$STAGE" | cut -f1)"
+echo "Repo staged in $STAGE. Next: bin/control/push-kit --repo"
