@@ -12,5 +12,6 @@
   roles:
     - storage
     - base
+    - repo
     - dnsmasq
     - nfs

@@ -1,0 +1,19 @@
+---
+- name: Check the offline repo has been pulled onto the data disk
+  ansible.builtin.stat:
+    path: "{{ data_mount }}/apps/repo/repodata/repomd.xml"
+  register: hpc_repo
+
+- name: Stop if there is no offline repo
+  ansible.builtin.assert:
+    that: hpc_repo.stat.exists
+    fail_msg: "No offline repo in {{ data_mount }}/apps/repo. Run push-kit --repo, then pull-kit."
+
+- name: Point dnf at the offline repo
+  ansible.builtin.yum_repository:
+    name: hpc-local
+    description: HPC offline repo (sneakernet)
+    baseurl: "file://{{ data_mount }}/apps/repo"
+    gpgcheck: false
+    enabled: true
+    priority: "10"

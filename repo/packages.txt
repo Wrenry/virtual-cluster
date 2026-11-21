@@ -11,6 +11,7 @@ pmix
 # Accounting database
 mariadb-server
 mariadb
+mysql-selinux
 # Common to head node and workers
 chrony
 nfs-utils
