@@ -69,7 +69,7 @@
     dest: /etc/my.cnf.d/slurm-innodb.cnf
     content: |
       [mysqld]
-      innodb_buffer_pool_size=1024M
+      innodb_buffer_pool_size={{ slurm_innodb_buffer_pool }}
       innodb_log_file_size=64M
       innodb_lock_wait_timeout=900
     mode: "0644"
@@ -135,3 +135,40 @@
     name: slurmdbd
     enabled: true
     state: started
+
+- name: slurm.conf and cgroup.conf
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/slurm/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - slurm.conf
+    - cgroup.conf
+  notify: Restart slurmctld
+
+- name: Check the cluster is registered in the accounting database
+  ansible.builtin.command: sacctmgr -nP show cluster format=cluster
+  register: slurm_clusters
+  changed_when: false
+
+- name: Register the cluster
+  ansible.builtin.command: sacctmgr -i add cluster {{ slurm_cluster_name }}
+  when: slurm_cluster_name not in slurm_clusters.stdout_lines
+
+
+- name: slurmctld enabled and running
+  ansible.builtin.systemd:
+    name: slurmctld
+    enabled: true
+    state: started
+
+- name: Open slurmctld and the srun port range on the cluster VLAN
+  ansible.builtin.command: firewall-cmd --permanent --zone=internal --add-port={{ item }}
+  register: fw_port
+  changed_when: "'ALREADY_ENABLED' not in fw_port.stderr"
+  loop:
+    - 6817/tcp
+    - "{{ slurm_srun_ports }}/tcp"
+  notify: Reload firewalld

@@ -1,0 +1,35 @@
+# Managed by Ansible (slurm role). Served to workers configless.
+ClusterName={{ slurm_cluster_name }}
+SlurmctldHost={{ ansible_hostname }}({{ network.head_ip }})
+SlurmctldParameters=enable_configless
+AuthType=auth/munge
+SlurmUser=slurm
+
+StateSaveLocation=/var/spool/slurmctld
+SlurmdSpoolDir=/var/spool/slurmd
+SlurmctldPidFile=/run/slurmctld/slurmctld.pid
+SlurmdPidFile=/run/slurmd/slurmd.pid
+SlurmctldLogFile=/var/log/slurm/slurmctld.log
+SlurmdLogFile=/var/log/slurm/slurmd.log
+
+ProctrackType=proctrack/cgroup
+TaskPlugin=task/cgroup,task/affinity
+SelectType=select/cons_tres
+SelectTypeParameters=CR_Core_Memory
+SchedulerType=sched/backfill
+JobAcctGatherType=jobacct_gather/cgroup
+
+AccountingStorageType=accounting_storage/slurmdbd
+AccountingStorageHost={{ ansible_hostname }}
+
+SlurmdTimeout=60
+ReturnToService=2
+SrunPortRange={{ slurm_srun_ports }}
+
+# Elastic workers register themselves as dynamic nodes (slurmd -Z) with their class as a feature.
+MaxNodeCount={{ classes.values() | map(attribute='max_nodes') | sum }}
+TreeWidth=65533
+{% for name, c in classes.items() %}
+NodeSet=ns_{{ name }} Feature={{ name }}
+PartitionName={{ name }} Nodes=ns_{{ name }} MaxTime=INFINITE State=UP{{ ' Default=YES' if loop.first else '' }}
+{% endfor %}

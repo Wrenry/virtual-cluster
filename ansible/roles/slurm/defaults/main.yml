@@ -3,3 +3,5 @@ munge_uid: 450
 slurm_uid: 451
 slurm_cluster_name: hpc-lab
 slurm_db_name: slurm_acct_db
+slurm_innodb_buffer_pool: 2048M   # 26.05 warns below 2 GB
+slurm_srun_ports: 60001-63000

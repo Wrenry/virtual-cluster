@@ -8,3 +8,8 @@
   ansible.builtin.systemd:
     name: slurmdbd
     state: restarted
+
+- name: Restart slurmctld
+  ansible.builtin.systemd:
+    name: slurmctld
+    state: restarted
