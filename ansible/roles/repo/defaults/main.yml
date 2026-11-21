@@ -1,0 +1,3 @@
+---
+hpc_offline_only: true          # true: hpc-local is the only package source
+hpc_online_repos: [baseos, appstream, extras]

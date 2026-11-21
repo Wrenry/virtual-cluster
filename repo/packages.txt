@@ -15,3 +15,11 @@ mysql-selinux
 # Common to head node and workers
 chrony
 nfs-utils
+# Head node base, so a fresh head node can be built offline
+ansible-core
+dnf-plugins-core
+dnsmasq
+bind-utils
+firewalld
+rsync
+xfsprogs

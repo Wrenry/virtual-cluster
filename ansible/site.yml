@@ -11,8 +11,8 @@
     cluster_domain: hpc.lab
   roles:
     - storage
-    - base
     - repo
+    - base
     - dnsmasq
     - nfs
     - slurm

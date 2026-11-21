@@ -18,3 +18,16 @@
     enabled: true
     priority: "10"
     metadata_expire: "0"
+
+- name: List the enabled repos
+  ansible.builtin.command: dnf -q repolist --enabled
+  register: enabled_repos
+  changed_when: false
+
+- name: Turn the online repos off (offline only) or back on (fallback allowed)
+  ansible.builtin.command: >-
+    dnf config-manager --set-{{ 'disabled' if hpc_offline_only else 'enabled' }} {{ item }}
+  loop: "{{ hpc_online_repos }}"
+  when: (item in enabled_ids) == hpc_offline_only
+  vars:
+    enabled_ids: "{{ enabled_repos.stdout_lines | map('split') | map('first') | list }}"
