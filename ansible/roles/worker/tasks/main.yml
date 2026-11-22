@@ -81,7 +81,7 @@
 - name: Time from the head node only
   ansible.builtin.lineinfile:
     path: /etc/chrony.conf
-    regexp: '^(pool|server) '
+    regexp: '^(pool|server) (?!{{ network.head_ip }} )'
     state: absent
   notify: Restart chronyd
 
@@ -124,19 +124,6 @@
     enabled: false
     state: stopped
   when: "'firewalld.service' in ansible_facts.services"
-
-- name: Root SSH directory
-  ansible.builtin.file:
-    path: /root/.ssh
-    state: directory
-    mode: "0700"
-
-- name: Head node root key, for pushing the munge key at deploy
-  ansible.builtin.lineinfile:
-    path: /root/.ssh/authorized_keys
-    line: "{{ lookup('ansible.builtin.file', '/root/.ssh/id_ed25519.pub') }}"
-    create: true
-    mode: "0600"
 
 - name: Stop cloud-init from blocking root's key on each new clone
   ansible.builtin.copy:
