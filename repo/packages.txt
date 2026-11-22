@@ -23,3 +23,13 @@ bind-utils
 firewalld
 rsync
 xfsprogs
+# sssd family: the template has these, and nfs-utils needs sssd-nfs-idmap
+# at the same version (conditional dependency dnf download skips)
+sssd-nfs-idmap
+sssd-common
+sssd-client
+sssd-kcm
+libsss_certmap
+libsss_idmap
+libsss_nss_idmap
+libsss_sudo
