@@ -8,6 +8,8 @@ network:
   vlan_id: 50
   subnet: 172.16.50.0/24
   head_ip: 172.16.50.10
+  image_ip: 172.16.50.5
+  domain: hpc.lab
 
 classes:
   xs: { code: 1, vcpu: 2,  mem_gb: 4,  max_nodes: 16 }
