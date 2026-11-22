@@ -1,0 +1,146 @@
+---
+- name: Fixed-ID groups for munge and slurm (same as the head node)
+  ansible.builtin.group:
+    name: "{{ item.name }}"
+    gid: "{{ item.id }}"
+    system: true
+  loop:
+    - { name: munge, id: "{{ munge_uid }}" }
+    - { name: slurm, id: "{{ slurm_uid }}" }
+
+- name: Fixed-ID users for munge and slurm (before the packages)
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    uid: "{{ item.id }}"
+    group: "{{ item.name }}"
+    system: true
+    shell: /sbin/nologin
+    home: "{{ item.home }}"
+    create_home: false
+  loop:
+    - { name: munge, id: "{{ munge_uid }}", home: /run/munge }
+    - { name: slurm, id: "{{ slurm_uid }}", home: /var/lib/slurm }
+
+- name: Copy the offline repo from the head node for the build
+  ansible.builtin.copy:
+    src: "{{ head_repo }}/"
+    dest: /var/tmp/hpc-repo/
+    mode: preserve
+
+- name: Build-time repo (removed when the image is sealed)
+  ansible.builtin.yum_repository:
+    name: hpc-build
+    description: HPC offline repo (build copy)
+    baseurl: file:///var/tmp/hpc-repo
+    gpgcheck: false
+    metadata_expire: "0"
+
+- name: Find the AlmaLinux online repo files
+  ansible.builtin.find:
+    paths: /etc/yum.repos.d
+    patterns: "almalinux-*.repo"
+  register: online_repos
+
+- name: Turn the online repos off (workers have no internet)
+  ansible.builtin.replace:
+    path: "{{ item.path }}"
+    regexp: '^enabled=1'
+    replace: 'enabled=0'
+  loop: "{{ online_repos.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Install slurmd, munge, PMIx, chrony and NFS client from the offline repo only
+  ansible.builtin.dnf:
+    name: [slurm, slurm-slurmd, munge, pmix, chrony, nfs-utils]
+    state: present
+    disablerepo: "*"
+    enablerepo: hpc-build
+
+- name: Permanent repo for workers, read over NFS
+  ansible.builtin.yum_repository:
+    name: hpc-local
+    description: HPC offline repo (sneakernet, over NFS)
+    baseurl: file:///apps/repo
+    gpgcheck: false
+    metadata_expire: "0"
+    skip_if_unavailable: true
+
+- name: Slurm directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "0755"
+  loop:
+    - { path: /etc/slurm, owner: root }
+    - { path: /var/spool/slurmd, owner: root }
+    - { path: /var/log/slurm, owner: slurm }
+
+- name: Time from the head node only
+  ansible.builtin.lineinfile:
+    path: /etc/chrony.conf
+    regexp: '^(pool|server) '
+    state: absent
+  notify: Restart chronyd
+
+- name: Head node as the time server
+  ansible.builtin.lineinfile:
+    path: /etc/chrony.conf
+    line: "server {{ network.head_ip }} iburst"
+  notify: Restart chronyd
+
+- name: Mount points for the shared directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: [/apps, /scratch]
+
+- name: NFS mounts from the head node (mounted at boot, not during the build)
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\S+:/srv/nfs/{{ item.share }}\s'
+    line: "{{ network.head_ip }}:/srv/nfs/{{ item.share }} {{ item.mnt }} nfs {{ item.opts }},_netdev 0 0"
+  loop:
+    - { share: home, mnt: /home, opts: rw }
+    - { share: apps, mnt: /apps, opts: ro }
+    - { share: scratch, mnt: /scratch, opts: rw }
+
+- name: munge and slurmd installed but off until deploy pushes the key
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop: [munge, slurmd]
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: No host firewall on workers (isolated VLAN, MPI uses random ports)
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: false
+    state: stopped
+  when: "'firewalld.service' in ansible_facts.services"
+
+- name: Root SSH directory
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    mode: "0700"
+
+- name: Head node root key, for pushing the munge key at deploy
+  ansible.builtin.lineinfile:
+    path: /root/.ssh/authorized_keys
+    line: "{{ lookup('ansible.builtin.file', '/root/.ssh/id_ed25519.pub') }}"
+    create: true
+    mode: "0600"
+
+- name: Stop cloud-init from blocking root's key on each new clone
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-hpc.cfg
+    content: |
+      disable_root: false
+    mode: "0644"

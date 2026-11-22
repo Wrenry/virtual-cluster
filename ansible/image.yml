@@ -1,0 +1,10 @@
+---
+- name: Build the golden worker image
+  hosts: image
+  become: true
+  vars_files:
+    - "{{ playbook_dir }}/../classes.yml"
+  vars:
+    head_repo: /srv/nfs/apps/repo
+  roles:
+    - worker
