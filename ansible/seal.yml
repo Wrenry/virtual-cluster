@@ -1,0 +1,44 @@
+---
+# Run once, after image.yml, right before converting the VM to a template.
+- name: Seal the golden worker image
+  hosts: image
+  become: true
+  tasks:
+    - name: Remove the build-time repo and its copy
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/yum.repos.d/hpc-build.repo
+        - /var/tmp/hpc-repo
+
+    - name: Clean the dnf cache
+      ansible.builtin.command: dnf clean all
+
+    - name: Reset cloud-init so each clone runs it fresh
+      ansible.builtin.command: cloud-init clean --logs
+
+    - name: Empty the machine ID (regenerated on first boot)
+      ansible.builtin.copy:
+        dest: /etc/machine-id
+        content: ""
+        mode: "0444"
+
+    - name: Find the SSH host keys
+      ansible.builtin.find:
+        paths: /etc/ssh
+        patterns: "ssh_host_*"
+      register: hostkeys
+
+    - name: Remove the SSH host keys (each clone makes its own)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ hostkeys.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Power off
+      ansible.builtin.command: shutdown -h +0
+      async: 1
+      poll: 0
