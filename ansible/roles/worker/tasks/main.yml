@@ -50,6 +50,13 @@
   loop_control:
     label: "{{ item.path }}"
 
+- name: Bring the template up to the offline repo versions first (no more 9.8 vs 9.9 drift)
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    disablerepo: "*"
+    enablerepo: hpc-build
+
 - name: Install slurmd, munge, PMIx, Open MPI, chrony and NFS client from the offline repo only
   ansible.builtin.dnf:
     name: [slurm, slurm-slurmd, munge, pmix, openmpi, chrony, nfs-utils]
