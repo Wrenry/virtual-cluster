@@ -8,7 +8,7 @@ variable "head_root_pubkey" {
 }
 
 resource "proxmox_virtual_environment_vm" "image" {
-  name      = "hpc-worker-image"
+  name      = "hpc-worker-image-v2"
   node_name = var.node_name
   tags      = ["hpc", "image"]
 
@@ -37,6 +37,7 @@ resource "proxmox_virtual_environment_vm" "image" {
   }
 
   initialization {
+    upgrade      = false
     datastore_id = var.datastore
 
     ip_config {

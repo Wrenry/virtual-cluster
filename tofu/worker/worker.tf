@@ -54,6 +54,7 @@ resource "proxmox_virtual_environment_vm" "worker" {
   }
 
   initialization {
+    upgrade      = false
     datastore_id = var.datastore
 
     ip_config {

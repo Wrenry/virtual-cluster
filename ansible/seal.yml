@@ -38,6 +38,12 @@
       loop_control:
         label: "{{ item.path }}"
 
+    - name: Blank hostname, so the first DHCP request carries no stale name
+      ansible.builtin.copy:
+        dest: /etc/hostname
+        content: ""
+        mode: "0644"
+
     - name: Power off
       ansible.builtin.command: shutdown -h +0
       async: 1

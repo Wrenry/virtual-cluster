@@ -50,9 +50,9 @@
   loop_control:
     label: "{{ item.path }}"
 
-- name: Install slurmd, munge, PMIx, chrony and NFS client from the offline repo only
+- name: Install slurmd, munge, PMIx, Open MPI, chrony and NFS client from the offline repo only
   ansible.builtin.dnf:
-    name: [slurm, slurm-slurmd, munge, pmix, chrony, nfs-utils]
+    name: [slurm, slurm-slurmd, munge, pmix, openmpi, chrony, nfs-utils]
     state: present
     disablerepo: "*"
     enablerepo: hpc-build
@@ -91,22 +91,18 @@
     line: "server {{ network.head_ip }} iburst"
   notify: Restart chronyd
 
-- name: Mount points for the shared directories
+- name: Mount points for the shared paths (no mode, so a mounted share keeps its own)
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ item.mnt }}"
     state: directory
-    mode: "0755"
-  loop: [/apps, /scratch]
+  loop: "{{ shared_paths }}"
 
-- name: NFS mounts from the head node (mounted at boot, not during the build)
+- name: NFS mounts from the head node, same paths as on the head node (mounted at boot)
   ansible.builtin.lineinfile:
     path: /etc/fstab
     regexp: '^\S+:/srv/nfs/{{ item.share }}\s'
-    line: "{{ network.head_ip }}:/srv/nfs/{{ item.share }} {{ item.mnt }} nfs {{ item.opts }},_netdev 0 0"
-  loop:
-    - { share: home, mnt: /home, opts: rw }
-    - { share: apps, mnt: /apps, opts: ro }
-    - { share: scratch, mnt: /scratch, opts: rw }
+    line: "{{ network.head_ip }}:/srv/nfs/{{ item.share }} {{ item.mnt }} nfs {{ item.nfs_opts }},_netdev 0 0"
+  loop: "{{ shared_paths }}"
 
 - name: munge and slurmd installed but off until deploy pushes the key
   ansible.builtin.systemd:
@@ -125,9 +121,44 @@
     state: stopped
   when: "'firewalld.service' in ansible_facts.services"
 
-- name: Stop cloud-init from blocking root's key on each new clone
+- name: cloud-init keeps root's key usable and sets short hostnames
   ansible.builtin.copy:
     dest: /etc/cloud/cloud.cfg.d/99-hpc.cfg
     content: |
       disable_root: false
+      prefer_fqdn_over_hostname: false
     mode: "0644"
+
+- name: Script that re-runs DHCP once the clone has its real hostname
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/hpc-dhcp-refresh
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      # Re-run DHCP after cloud-init sets the hostname, so dnsmasq records the real name.
+      DEV=$(nmcli -t -f DEVICE,TYPE device | awk -F: '$2=="ethernet"{print $1; exit}')
+      CON=$(nmcli -g GENERAL.CONNECTION device show "$DEV")
+      [ -n "$CON" ] && nmcli connection up "$CON"
+
+- name: Run it after cloud-init on every boot
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/hpc-dhcp-refresh.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Re-run DHCP after cloud-init sets the hostname
+      After=cloud-final.service NetworkManager.service
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/hpc-dhcp-refresh
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable the DHCP refresh (runs at the next boot, not now)
+  ansible.builtin.systemd:
+    name: hpc-dhcp-refresh.service
+    enabled: true
+    daemon_reload: true

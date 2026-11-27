@@ -33,3 +33,6 @@ libsss_certmap
 libsss_idmap
 libsss_nss_idmap
 libsss_sudo
+# MPI: runtime on workers, compilers on the head node for benchmarks
+openmpi
+openmpi-devel
