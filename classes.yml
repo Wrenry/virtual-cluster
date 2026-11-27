@@ -10,6 +10,8 @@ network:
   head_ip: 172.16.50.10
   image_ip: 172.16.50.5
   domain: hpc.lab
+  dhcp_start: 172.16.50.100
+  dhcp_end: 172.16.50.199
 
 classes:
   xs: { code: 1, vcpu: 2,  mem_gb: 4,  max_nodes: 16 }

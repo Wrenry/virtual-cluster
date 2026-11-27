@@ -10,8 +10,9 @@ local=/{{ cluster_domain }}/
 expand-hosts
 host-record=hpc-head.{{ cluster_domain }},{{ network.head_ip }}
 
-# Static leases only: nodes get an address only if a file in the hosts dir names their MAC
-dhcp-range={{ network.head_ip }},static,255.255.255.0
+# Dynamic pool for workers; their hostnames (from cloud-init) go into DNS automatically
+dhcp-range={{ network.dhcp_start }},{{ network.dhcp_end }},255.255.255.0,12h
+dhcp-authoritative
 dhcp-hostsdir=/etc/dnsmasq-hosts
 # Empty router option = no default gateway on this isolated VLAN
 dhcp-option=option:router
