@@ -4,6 +4,13 @@
     name: dnsmasq
     state: present
 
+- name: Let hpc.conf decide how dnsmasq binds (the stock dnsmasq.conf sets bind-interfaces)
+  ansible.builtin.replace:
+    path: /etc/dnsmasq.conf
+    regexp: '^bind-interfaces\s*$'
+    replace: '#bind-interfaces  # disabled by Ansible: hpc.conf uses bind-dynamic'
+  notify: Restart dnsmasq
+
 - name: Directory for per-node DHCP reservations
   ansible.builtin.file:
     path: /etc/dnsmasq-hosts
