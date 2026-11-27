@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Stages the offline repo (repo/packages.txt plus the Slurm RPMs) in repo-build/stage.
+# Stages the offline repo in repo-build/stage:
+#   repo/packages.txt       what the cluster needs (Slurm, MPI, services)
+#   repo/base-packages.txt  everything the template has installed, so the image
+#                           can be upgraded to the repo's versions as a matched set
+# plus the Slurm RPMs from ~/rpmbuild.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -15,10 +19,12 @@ mkdir -p "$STAGE"
 createrepo_c -q "$RPMS"
 VER="$(rpm -qp --qf '%{VERSION}\n' "$RPMS"/slurm-slurmctld-*.rpm | head -1)"
 
-mapfile -t PKGS < <(grep -v -E '^[[:space:]]*(#|$)' repo/packages.txt)
+mapfile -t PKGS < <(cat repo/packages.txt repo/base-packages.txt 2>/dev/null \
+  | tr -d '\r' | grep -v -E '^[[:space:]]*(#|$)' | sort -u)
 echo "Resolving ${#PKGS[@]} packages with all dependencies (Slurm ${VER})"
 dnf download -q --resolve --alldeps --destdir "$STAGE" \
-  --repofrompath="slurm-local,file://${RPMS}" --setopt=slurm-local.gpgcheck=0 --setopt=slurm-local.metadata_expire=0 \
+  --repofrompath="slurm-local,file://${RPMS}" \
+  --setopt=slurm-local.gpgcheck=0 --setopt=slurm-local.metadata_expire=0 \
   "${PKGS[@]}"
 rm -f "$STAGE"/*.i686.rpm
 
