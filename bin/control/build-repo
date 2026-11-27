@@ -18,7 +18,7 @@ VER="$(rpm -qp --qf '%{VERSION}\n' "$RPMS"/slurm-slurmctld-*.rpm | head -1)"
 mapfile -t PKGS < <(grep -v -E '^[[:space:]]*(#|$)' repo/packages.txt)
 echo "Resolving ${#PKGS[@]} packages with all dependencies (Slurm ${VER})"
 dnf download -q --resolve --alldeps --destdir "$STAGE" \
-  --repofrompath="slurm-local,file://${RPMS}" --setopt=slurm-local.gpgcheck=0 \
+  --repofrompath="slurm-local,file://${RPMS}" --setopt=slurm-local.gpgcheck=0 --setopt=slurm-local.metadata_expire=0 \
   "${PKGS[@]}"
 rm -f "$STAGE"/*.i686.rpm
 
