@@ -25,3 +25,36 @@
     name: nfs-server
     enabled: true
     state: started
+
+- name: Mount points for the shared paths (no mode, so a mounted share keeps its own)
+  ansible.builtin.file:
+    path: "{{ item.mnt }}"
+    state: directory
+  loop: "{{ shared_paths }}"
+
+- name: Bind mounts in fstab, after the data disk
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\S+\s+{{ item.mnt }}\s'
+    line: "{{ data_mount }}/{{ item.share }} {{ item.mnt }} none bind,x-systemd.requires-mounts-for={{ data_mount }} 0 0"
+  loop: "{{ shared_paths }}"
+  register: bind_fstab
+
+- name: Tell systemd about the new fstab lines
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: bind_fstab.changed
+
+- name: Check which shared paths are mounted
+  ansible.builtin.command: findmnt -n {{ item.mnt }}
+  loop: "{{ shared_paths }}"
+  register: bind_state
+  changed_when: false
+  failed_when: false
+
+- name: Mount the ones that are not
+  ansible.builtin.command: mount {{ item.item.mnt }}
+  loop: "{{ bind_state.results }}"
+  loop_control:
+    label: "{{ item.item.mnt }}"
+  when: item.rc != 0

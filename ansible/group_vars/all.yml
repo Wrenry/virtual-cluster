@@ -1,3 +1,9 @@
 ---
 munge_uid: 450
 slurm_uid: 451
+
+# The same paths on the head node (bind mounts) and the workers (NFS)
+shared_paths:
+  - { share: home,    mnt: /shared/home, nfs_opts: rw }
+  - { share: apps,    mnt: /apps,        nfs_opts: ro }
+  - { share: scratch, mnt: /scratch,     nfs_opts: rw }
